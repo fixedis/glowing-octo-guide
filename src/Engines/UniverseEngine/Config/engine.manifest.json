@@ -1,0 +1,44 @@
+{
+    "id": "universe-engine",
+    "name": "Universe Engine",
+    "version": "0.4.0",
+    "apiVersion": "1.0.0",
+    "engineClass": "Project\\Engines\\UniverseEngine\\UniverseEngine",
+    "requires": [
+        "core.engine",
+        "core.state",
+        "core.commands",
+        "core.events"
+    ],
+    "provides": [
+        "universe.galaxies",
+        "universe.systems",
+        "universe.planets",
+        "universe.colonies"
+    ],
+    "commands": [
+        "GenerateGalaxyChunk",
+        "GenerateStarSystems",
+        "GeneratePlanets",
+        "GenerateColonyArea",
+        "PlaceBuilding",
+        "DemolishBuilding",
+        "SpawnPlanet",
+        "SpawnShip"
+    ],
+    "events": [
+        "GalaxyChunkGenerated",
+        "StarSystemsGenerated",
+        "PlanetsGenerated",
+        "ColonyAreaGenerated",
+        "BuildingPlaced",
+        "BuildingDemolished",
+        "PlanetSpawned",
+        "ShipSpawned"
+    ],
+    "entities": {
+        "path": "Entities",
+        "interface": "Project\\Engines\\UniverseEngine\\Contracts\\IUniverseEntity",
+        "autoload": true
+    }
+}

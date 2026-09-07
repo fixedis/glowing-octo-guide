@@ -1,0 +1,28 @@
+{
+    "id": "fleet-engine",
+    "name": "Fleet Engine",
+    "version": "0.1.0",
+    "apiVersion": "1.0.0",
+    "engineClass": "Project\\Engines\\FleetEngine\\FleetEngine",
+    "requires": [
+        "core.engine",
+        "core.state",
+        "core.commands",
+        "core.events"
+    ],
+    "provides": [
+        "fleet.management"
+    ],
+    "commands": [
+        "FormFleet",
+        "MoveFleet",
+        "DisembarkFleet"
+    ],
+    "events": [
+        "FleetFormed",
+        "FleetMoved",
+        "FleetDisembarked"
+    ],
+    "entities": null,
+    "bridge": null
+}

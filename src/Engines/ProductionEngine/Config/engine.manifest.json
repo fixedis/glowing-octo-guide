@@ -1,0 +1,28 @@
+{
+    "id": "production-engine",
+    "name": "Production Engine",
+    "version": "0.1.0",
+    "apiVersion": "1.0.0",
+    "engineClass": "Project\\Engines\\ProductionEngine\\ProductionEngine",
+    "requires": [
+        "core.engine",
+        "core.state",
+        "core.commands",
+        "core.events"
+    ],
+    "provides": [
+        "production.buildings",
+        "production.units"
+    ],
+    "commands": [
+        "ProduceBuilding",
+        "ProduceUnit"
+    ],
+    "events": [
+        "BuildingProduced",
+        "UnitProduced",
+        "ProductionFailed"
+    ],
+    "entities": null,
+    "bridge": null
+}

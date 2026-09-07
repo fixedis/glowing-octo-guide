@@ -1,0 +1,31 @@
+{
+    "id": "economy-engine",
+    "name": "Economy Engine",
+    "version": "0.1.0",
+    "apiVersion": "1.0.0",
+    "engineClass": "Project\\Engines\\EconomyEngine\\EconomyEngine",
+    "requires": [
+        "core.engine",
+        "core.state",
+        "core.commands",
+        "core.events"
+    ],
+    "provides": [
+        "economy.resources",
+        "economy.production"
+    ],
+    "commands": [
+        "RegisterColonyEconomy",
+        "CollectResources"
+    ],
+    "events": [
+        "ColonyEconomyRegistered",
+        "ResourcesProduced",
+        "ResourcesCollected"
+    ],
+    "entities": {
+        "path": "Entities",
+        "interface": "Project\\Engines\\EconomyEngine\\Contracts\\IEconomyEntity",
+        "autoload": true
+    }
+}

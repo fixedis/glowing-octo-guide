@@ -1,0 +1,21 @@
+{
+    "id": "network-engine",
+    "name": "Network Engine",
+    "version": "0.1.0",
+    "apiVersion": "1.0.0",
+    "engineClass": "Project\\Engines\\NetworkEngine\\NetworkEngine",
+    "requires": [
+        "core.engine",
+        "core.state",
+        "core.commands",
+        "core.events"
+    ],
+    "provides": [
+        "network.api",
+        "network.auth"
+    ],
+    "commands": [],
+    "events": [],
+    "entities": null,
+    "bridge": null
+}

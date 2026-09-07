@@ -1,0 +1,24 @@
+{
+    "id": "combat-engine",
+    "name": "Combat Engine",
+    "version": "0.1.0",
+    "apiVersion": "1.0.0",
+    "engineClass": "Project\\Engines\\CombatEngine\\CombatEngine",
+    "requires": [
+        "core.engine",
+        "core.state",
+        "core.commands",
+        "core.events"
+    ],
+    "provides": [
+        "combat.resolution"
+    ],
+    "commands": [
+        "ResolveCombat"
+    ],
+    "events": [
+        "CombatResolved"
+    ],
+    "entities": null,
+    "bridge": null
+}
