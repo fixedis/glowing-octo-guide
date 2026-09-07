@@ -1,0 +1,23 @@
+{
+    "name": "universe-client",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "test": "vitest run",
+        "test:watch": "vitest"
+    },
+    "dependencies": {
+        "jsdom": "^30.0.1",
+        "three": "^0.160.0"
+    },
+    "devDependencies": {
+        "@types/three": "^0.160.0",
+        "pngjs": "^7.0.0",
+        "typescript": "^5.3.3",
+        "vite": "^5.4.0",
+        "vitest": "^2.0.0"
+    }
+}

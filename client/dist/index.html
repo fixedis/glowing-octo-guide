@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Universe Map</title>
+    <style>
+        html, body { margin: 0; height: 100%; background: #010103; color: #cfd8ea;
+                     font-family: system-ui, -apple-system, sans-serif; overflow: hidden;
+                     user-select: none; -webkit-user-select: none; }
+        #app { position: fixed; inset: 0; }
+        #hud { position: fixed; top: 12px; left: 12px; padding: 10px 14px;
+               background: rgba(5, 9, 17, 0.78); border: 1px solid #24344f;
+               border-radius: 8px; font-size: 12px; z-index: 2; }
+        #hud .title { font-weight: 700; letter-spacing: 0.08em; margin-bottom: 6px; }
+        #hud .row { margin: 2px 0; color: #8fb8e8; }
+        #hud b { color: #4d9fff; }
+        #selected { position: fixed; top: 12px; right: 12px; padding: 10px 14px;
+                    background: rgba(5, 9, 17, 0.85); border: 1px solid #24344f;
+                    border-radius: 8px; font-size: 12px; z-index: 2; max-width: 280px; }
+        #selected .name { font-size: 14px; font-weight: 700; color: #eaf2ff; margin-bottom: 4px; }
+        #selected .type { color: #7f96c0; text-transform: uppercase; font-size: 10px; letter-spacing: 0.12em; }
+        #selected button { margin-top: 8px; padding: 6px 12px; background: #1d3a66;
+                           border: 1px solid #4d9fff; color: #fff; border-radius: 6px;
+                           cursor: pointer; font-size: 11px; margin-right: 6px; }
+        #selected button:hover { background: #2a4a7a; }
+        /* Кнопка «НАЗАД» живёт ВНЕ панели выбора: панель скрывается после
+           входа/снятия выделения, а возврат должен быть доступен всегда. */
+        #backButton { position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+                      padding: 8px 16px; background: rgba(5, 9, 17, 0.85);
+                      border: 1px solid #4d9fff; color: #fff; border-radius: 8px;
+                      cursor: pointer; font-size: 12px; z-index: 2; display: none; }
+        #backButton:hover { background: #1d3a66; }
+        /* Хлебные крошки: цепочка навигации под кнопкой «Назад», по центру. */
+        #breadcrumbs { position: fixed; top: 48px; left: 50%; transform: translateX(-50%);
+                       display: flex; align-items: center; gap: 6px; z-index: 2;
+                       padding: 5px 12px; background: rgba(5, 9, 17, 0.78);
+                       border: 1px solid #24344f; border-radius: 8px;
+                       font-size: 12px; white-space: nowrap; }
+        .crumb { color: #8fb8e8; }
+        button.crumb { background: none; border: none; padding: 0; margin: 0;
+                       cursor: pointer; font-size: 12px; font-family: inherit;
+                       color: #4d9fff; text-decoration: underline dotted; }
+        button.crumb:hover { color: #7db9ff; }
+        .crumb-current { color: #eaf2ff; font-weight: 700; }
+        .crumb-sep { color: #44597a; }
+    </style>
+  <script type="module" crossorigin src="/assets/index-DSNpWyf7.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/three-DFPkcR09.js">
+</head>
+<body>
+    <div id="app"></div>
+    <div id="hud">
+        <div class="title">UNIVERSE MAP</div>
+        <div class="row">Режим: <b id="modeValue">Карта вселенной</b></div>
+        <div class="row">Путь: <b id="crumbValue">Universe</b></div>
+        <div class="row">Seed: <b id="seedValue">0</b></div>
+        <div class="row">Объектов: <b id="countValue">0</b></div>
+        <div class="row">ЛКМ — перетаскивание карты · Колесо — зум</div>
+    </div>
+    <div id="selected" style="display:none"></div>
+    <button id="backButton">← НАЗАД</button>
+    <div id="breadcrumbs"></div>
+    <script>
+        // TEMP DEBUG: вывод ошибок на страницу (удалить после отладки).
+        window.__errs = [];
+        function __showErr(msg) {
+            window.__errs.push(String(msg));
+            var el = document.getElementById('errbox');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'errbox';
+                el.style.cssText = 'position:fixed;top:110px;left:8px;font:10px monospace;color:#ff7b7b;z-index:9;max-width:70vw;white-space:pre-wrap;text-shadow:0 0 3px #000;';
+                document.body.appendChild(el);
+            }
+            el.textContent = window.__errs.slice(-4).join(' | ');
+        }
+        window.addEventListener('error', function(e) { __showErr('ERR: ' + e.message + ' @ ' + e.filename + ':' + e.lineno); });
+        window.addEventListener('unhandledrejection', function(e) { __showErr('REJ: ' + (e.reason && e.reason.stack ? e.reason.stack : e.reason)); });
+    </script>
+</body>
+</html>
