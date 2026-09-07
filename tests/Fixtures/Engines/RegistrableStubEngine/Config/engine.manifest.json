@@ -1,0 +1,16 @@
+{
+    "id": "registrable-stub-engine",
+    "name": "Registrable Stub Engine",
+    "version": "0.1.0",
+    "apiVersion": "1.0.0",
+    "engineClass": "Project\\Tests\\Fixtures\\Engines\\RegistrableStubEngine\\RegistrableStubEngine",
+    "requires": [
+        "core.engine",
+        "core.events"
+    ],
+    "provides": [
+        "stub.registrable"
+    ],
+    "commands": [],
+    "events": []
+}

@@ -1,0 +1,26 @@
+{
+    "id": "stub-engine",
+    "name": "Stub Engine",
+    "version": "0.1.0",
+    "apiVersion": "1.0.0",
+    "engineClass": "Project\\Tests\\Fixtures\\Engines\\StubEngine\\StubEngine",
+    "requires": [
+        "core.engine",
+        "core.events"
+    ],
+    "provides": [
+        "stub.feature"
+    ],
+    "commands": [
+        "StubCommand"
+    ],
+    "events": [
+        "StubEvent"
+    ],
+    "entities": {
+        "path": "Entities",
+        "interface": "Project\\Tests\\Fixtures\\Engines\\StubEngine\\Contracts\\StubEntityInterface",
+        "autoload": true
+    },
+    "bridge": "Bridge/StubCoreAdapter.php"
+}

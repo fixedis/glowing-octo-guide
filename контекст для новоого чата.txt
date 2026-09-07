@@ -1,0 +1,1605 @@
+---
+
+# 1. Файл `Docs/CoreEngine/architecture.md`
+
+```md
+<!-- Docs/CoreEngine/architecture.md -->
+
+# Архитектура CoreEngine
+
+CoreEngine — это модульное ядро игрового движка-оркестратора.
+
+Он не является движком графики, экономики, сети, UI или боя.
+Его задача — предоставить общую инфраструктуру для специализированных движков.
+
+---
+
+## Основная идея
+
+```text
+CoreEngine подключает движки.
+Движки подключают свои сущности.
+Сущности не изменяют ядра движков.
+Вся игровая доменная логика находится в подключаемых движках.
+```
+
+---
+
+## Уровни ответственности
+
+### CoreEngine отвечает за:
+
+- тики;
+- состояние;
+- команды;
+- события;
+- снапшоты;
+- реестр движков;
+- реестр сущностей;
+- загрузку манифестов;
+- зависимости движков;
+- детерминированную математику;
+- детерминированный RNG;
+- контейнер и DI;
+- bootstrap и запуск ядра.
+
+### CoreEngine не отвечает за:
+
+- конкретные ресурсы;
+- конкретные характеристики;
+- экономику;
+- бой;
+- графику;
+- звук;
+- UI;
+- сетевой протокол;
+- конкретные игровые объекты.
+
+---
+
+## Высокоуровневая схема
+
+```text
+CoreEngineBootstrap
+        ↓
+Container / DI
+        ↓
+CoreServices
+        ↓
+EngineLoader
+        ↓
+ManifestLoader
+        ↓
+EngineDependencyResolver
+        ↓
+EngineFactory
+        ↓
+EntityDiscovery
+        ↓
+EngineRegistration
+        ↓
+EngineRegistry
+        ↓
+Kernel
+        ↓
+Tick loop
+```
+
+---
+
+## Жизненный цикл запуска
+
+1. `CoreEngineBootstrap` получает путь к движкам и seed.
+2. Создаётся `Container`.
+3. Регистрируются базовые сервисы:
+   - Logger;
+   - State;
+   - EventBus;
+   - CommandBus;
+   - SystemPipeline;
+   - EngineRegistry;
+   - EntityRegistry;
+   - MathKernel;
+   - DeterministicRandom;
+   - SnapshotManager.
+4. Создаются `CoreServices`.
+5. Создаётся `Kernel`.
+6. Создаётся `EngineLoader`.
+7. `EngineLoader` читает манифесты движков.
+8. `EngineDependencyResolver` проверяет `requires` и `provides`.
+9. `EngineFactory` создаёт движки.
+10. `EntityDiscovery` находит сущности движков.
+11. `EntityRegistry` регистрирует сущности.
+12. Если движок реализует `RegistrableEngineInterface`, вызывается его `register()`.
+13. Движок регистрируется в `EngineRegistry`.
+14. `Kernel.boot()` запускает все движки.
+15. Ядро готово выполнять тики.
+
+---
+
+## Жизненный цикл тика
+
+```text
+runTick()
+    ↓
+инкремент тика
+    ↓
+state["tick"] = currentTick
+    ↓
+random.setTick(currentTick)
+    ↓
+TickStarted event
+    ↓
+обработка очереди команд
+    ↓
+команды выполняются через CommandBus
+    ↓
+неудачные команды публикуют CommandRejected
+    ↓
+создаётся TickContext
+    ↓
+SystemPipeline выполняет тик-системы
+    ↓
+TickEnded event
+    ↓
+SnapshotManager создаёт снапшот
+    ↓
+SnapshotManager сохраняет снапшот
+    ↓
+Kernel возвращает Snapshot
+```
+
+---
+
+## Ключевые правила архитектуры
+
+1. CoreEngine не содержит игровую доменную логику.
+2. Движки не должны напрямую вызывать друг друга.
+3. Взаимодействие движков происходит через:
+   - команды;
+   - события;
+   - состояние;
+   - снапшоты;
+   - контракты.
+4. Сущности движков отделены от ядер движков.
+5. Новые сущности должны добавляться без изменения ядра движка.
+6. Все зависимости движков описываются в манифестах.
+7. Числовая инфраструктура находится в CoreEngine.
+8. Конкретные числовые домены находятся в движках.
+9. Графика, UI, звук и сеть являются подключаемыми модулями.
+10. Источник истины — состояние после тика.
+
+---
+
+## Текущие ограничения
+
+- `EntityDiscovery` ожидает, что папка сущностей находится в namespace движка.
+- Вложенные пути сущностей пока не поддерживаются без явного namespace.
+- `InMemorySnapshotStore` хранит снапшоты только в памяти.
+- Нет файловых, сетевых и банковских адаптеров сохранения.
+- Нет реальных GraphicsEngine, EconomyEngine, NetworkEngine, UIEngine.
+- Командные обработчики пока не получают прямой доступ к RNG через аргументы.
+- Манифесты описывают команды и события как метаданные, но не валидируют их схемы автоматически.
+
+---
+
+## Будущие расширения
+
+- GraphicsEngine;
+- EconomyEngine;
+- NetworkEngine;
+- UIEngine;
+- AudioEngine;
+- PersistenceAdapter;
+- ReplayManager;
+- SchemaValidator для команд и событий;
+- расширенный EntityRegistry с фабриками сущностей;
+- поддержка явного namespace для сущностей;
+- система приоритетов тик-систем;
+- система отката и восстановления состояния.
+```
+
+---
+
+# 2. Файл `Docs/CoreEngine/concepts.md`
+
+```md
+<!-- Docs/CoreEngine/concepts.md -->
+
+# Основные концепции CoreEngine
+
+---
+
+## Tick
+
+Tick — это единица игрового времени.
+
+Каждый вызов `Kernel.runTick()` выполняет один полный цикл:
+
+- обработка команд;
+- выполнение систем;
+- публикация событий;
+- создание снапшота.
+
+Tick должен быть детерминированным.
+
+---
+
+## State
+
+State — это текущее состояние ядра.
+
+Он хранит данные в виде ключ-значение.
+
+Примеры:
+
+```text
+tick
+seed
+flags
+temporary runtime markers
+engine registration markers
+```
+
+State не является базой данных.
+Он является оперативным состоянием симуляции.
+
+---
+
+## Command
+
+Command — это намерение изменить состояние.
+
+Структура:
+
+```text
+id
+type
+payload
+actorId
+targetId
+version
+```
+
+Команда не меняет состояние напрямую.
+Она передаётся в `CommandBus`, где для неё должен быть зарегистрирован обработчик.
+
+---
+
+## CommandResult
+
+Результат выполнения команды.
+
+Может быть:
+
+```text
+success
+fail
+```
+
+Также может содержать события, которые нужно опубликовать после успешного выполнения.
+
+---
+
+## Event
+
+Event — это факт, который уже произошёл.
+
+Примеры:
+
+```text
+TickStarted
+TickEnded
+CommandRejected
+SystemExecuted
+```
+
+События используются для реакции движков, логирования, отладки и будущих интеграций.
+
+---
+
+## Snapshot
+
+Snapshot — это снимок состояния на конкретный тик.
+
+Содержит:
+
+```text
+tick
+state
+hash
+```
+
+Snapshot используется для:
+
+- проверки целостности;
+- восстановления состояния;
+- будущих сохранений;
+- будущих реплеев;
+- будущей сетевой синхронизации.
+
+---
+
+## Engine
+
+Engine — это подключаемый движок.
+
+Минимальный контракт:
+
+```text
+id()
+version()
+boot()
+shutdown()
+```
+
+Если движок хочет регистрировать механизмы в ядре, он реализует:
+
+```text
+RegistrableEngineInterface
+```
+
+---
+
+## RegistrableEngineInterface
+
+Расширенный контракт движка.
+
+Позволяет движку зарегистрировать:
+
+- обработчики команд;
+- обработчики событий;
+- тик-системы.
+
+При регистрации движок получает:
+
+```text
+EngineRegistration
+CoreServices
+```
+
+---
+
+## EngineRegistration
+
+Объект регистрации механизмов от имени конкретного движка.
+
+Позволяет:
+
+```text
+commandHandler(...)
+eventHandler(...)
+system(...)
+```
+
+Также хранит список зарегистрированных типов для диагностики.
+
+---
+
+## EngineManifest
+
+Описание движка в JSON.
+
+Содержит:
+
+```text
+id
+name
+version
+apiVersion
+engineClass
+requires
+provides
+commands
+events
+entities
+bridge
+basePath
+```
+
+---
+
+## EntityDiscovery
+
+Механизм поиска сущностей движка.
+
+Читает секцию `entities` из манифеста.
+
+Ожидает:
+
+```text
+path
+interface
+autoload
+```
+
+Сейчас namespace сущностей выводится из namespace класса движка и имени папки.
+
+---
+
+## EntityRegistry
+
+Реестр классов сущностей по движкам.
+
+Хранит:
+
+```text
+engineId → list of entity classes
+```
+
+Не создаёт экземпляры сущностей автоматически.
+Он регистрирует типы, которыми потом могут пользоваться движки.
+
+---
+
+## CoreServices
+
+Агрегатор сервисов ядра.
+
+Содержит:
+
+```text
+state
+eventBus
+commandBus
+systemPipeline
+engineRegistry
+entityRegistry
+container
+math
+random
+snapshots
+logger
+```
+
+Передаётся движкам при регистрации.
+
+---
+
+## Container
+
+DI-контейнер.
+
+Умеет:
+
+- хранить готовые инстансы;
+- хранить фабрики;
+- автоматически разрешать зависимости через Reflection;
+- защищаться от циклических зависимостей.
+
+---
+
+## EngineDependencyResolver
+
+Проверяет зависимости движков.
+
+Использует:
+
+```text
+requires
+provides
+```
+
+Проверяет:
+
+- отсутствие недостающих зависимостей;
+- отсутствие конфликтов `provides`;
+- отсутствие циклических зависимостей;
+- порядок загрузки движков.
+
+---
+
+## SnapshotManager
+
+Сервис снапшотов.
+
+Умеет:
+
+- создавать снапшот из состояния;
+- считать hash;
+- сохранять снапшот;
+- искать снапшот по тику;
+- восстанавливать состояние;
+- проверять hash.
+
+---
+
+## MathKernel
+
+Низкоуровневая числовая инфраструктура.
+
+Не содержит игровых доменов.
+
+Отвечает за:
+
+- integer arithmetic;
+- fixed point;
+- safe overflow checks;
+- division with scale;
+- rounding modes;
+- clamp;
+- float-to-fixed conversion;
+- fixed-to-float conversion.
+
+---
+
+## DeterministicRandom
+
+Детерминированный генератор случайных чисел.
+
+Использует:
+
+```text
+seed
+scope
+tick
+counter
+```
+
+Генерация основана на SHA-256.
+
+Предназначен для повторяемых игровых механик.
+
+---
+
+## Kernel
+
+Главный исполнитель тиков.
+
+Отвечает за:
+
+- очередь команд;
+- запуск тиков;
+- синхронизацию RNG;
+- выполнение систем;
+- публикацию событий;
+- создание и сохранение снапшотов.
+```
+
+---
+
+# 3. Файл `Docs/CoreEngine/module-guide.md`
+
+```md
+<!-- Docs/CoreEngine/module-guide.md -->
+
+# Руководство по созданию подключаемого движка
+
+Этот документ описывает, как создавать движки для CoreEngine.
+
+---
+
+## Базовая структура движка
+
+Пример:
+
+```text
+Engines/GraphicsEngine/
+    Core/
+        GraphicsEngine.php
+    Contracts/
+        IRenderEntity.php
+    Entities/
+        Stars/
+        Planets/
+        Ships/
+    Bridge/
+    Config/
+        engine.manifest.json
+```
+
+---
+
+## Обязательные части движка
+
+### 1. Класс движка
+
+Класс должен реализовать:
+
+```text
+Project\CoreEngine\Contracts\EngineInterface
+```
+
+или:
+
+```text
+Project\CoreEngine\Contracts\RegistrableEngineInterface
+```
+
+---
+
+### 2. Манифест
+
+Файл:
+
+```text
+Config/engine.manifest.json
+```
+
+---
+
+### 3. Сущности
+
+Если у движка есть сущности, они должны находиться в отдельной папке, например:
+
+```text
+Entities/
+```
+
+и реализовывать интерфейс, указанный в манифесте.
+
+---
+
+## Пример манифеста
+
+```json
+{
+    "id": "graphics-engine",
+    "name": "Graphics Engine",
+    "version": "0.1.0",
+    "apiVersion": "1.0.0",
+    "engineClass": "Project\\Engines\\GraphicsEngine\\Core\\GraphicsEngine",
+    "requires": [
+        "core.state",
+        "core.events"
+    ],
+    "provides": [
+        "graphics.render",
+        "graphics.scene"
+    ],
+    "commands": [],
+    "events": [],
+    "entities": {
+        "path": "Entities",
+        "interface": "Project\\Engines\\GraphicsEngine\\Contracts\\IRenderEntity",
+        "autoload": true
+    }
+}
+```
+
+---
+
+## Пример класса движка
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace Project\Engines\GraphicsEngine\Core;
+
+use Project\CoreEngine\Contracts\RegistrableEngineInterface;
+use Project\CoreEngine\Core\CoreServices;
+use Project\CoreEngine\Core\EngineRegistration;
+
+final class GraphicsEngine implements RegistrableEngineInterface
+{
+    public function id(): string
+    {
+        return 'graphics-engine';
+    }
+
+    public function version(): string
+    {
+        return '0.1.0';
+    }
+
+    public function register(
+        EngineRegistration $registration,
+        CoreServices $services
+    ): void {
+        // Регистрация команд, событий и систем.
+    }
+
+    public function boot(): void
+    {
+        // Запуск движка.
+    }
+
+    public function shutdown(): void
+    {
+        // Остановка движка.
+    }
+}
+```
+
+---
+
+## Регистрация обработчика команд
+
+Внутри `register()`:
+
+```php
+$registration->commandHandler('SomeCommand', new SomeCommandHandler());
+```
+
+---
+
+## Регистрация обработчика событий
+
+Внутри `register()`:
+
+```php
+$registration->eventHandler('SomeEvent', new SomeEventHandler());
+```
+
+---
+
+## Регистрация тик-системы
+
+Внутри `register()`:
+
+```php
+$registration->system(new SomeTickSystem());
+```
+
+---
+
+## Требования к сущностям
+
+Если манифест содержит:
+
+```json
+"entities": {
+    "path": "Entities",
+    "interface": "Project\\Engines\\GraphicsEngine\\Contracts\\IRenderEntity",
+    "autoload": true
+}
+```
+
+то:
+
+1. Папка `Entities` должна существовать внутри движка.
+2. Все автоматические сущности должны быть классами.
+3. Все автоматические сущности должны реализовывать указанный интерфейс.
+4. Абстрактные классы и интерфейсы пропускаются.
+5. Классы должны корректно загружаться через Composer autoload.
+
+---
+
+## Как CoreEngine выводит namespace сущностей
+
+Если класс движка:
+
+```text
+Project\Engines\GraphicsEngine\Core\GraphicsEngine
+```
+
+и папка сущностей:
+
+```text
+Entities
+```
+
+то namespace сущностей будет:
+
+```text
+Project\Engines\GraphicsEngine\Entities
+```
+
+Файл:
+
+```text
+Entities/Ships/ShipVisual.php
+```
+
+ожидает класс:
+
+```text
+Project\Engines\GraphicsEngine\Entities\Ships\ShipVisual
+```
+
+---
+
+## Правила для движков
+
+1. Движок не должен менять чужие движки напрямую.
+2. Движок не должен хранить игровые домены других движков.
+3. Движок должен использовать `EngineRegistration` для регистрации механизмов.
+4. Движок должен использовать `CoreServices` для доступа к сервисам ядра.
+5. Движок не должен создавать собственные механизмы随机ных чисел.
+6. Движок не должен использовать `rand()` или `mt_rand()`.
+7. Движок должен использовать `DeterministicRandomInterface`.
+8. Движок не должен использовать float для критичной симуляции.
+9. Движок должен использовать `MathKernelInterface` для числовых расчётов.
+10. Движок не должен напрямую обращаться к базе данных или сети.
+
+---
+
+## Проверка движка
+
+Перед подключением движок должен быть проверен:
+
+1. Манифест валиден.
+2. Класс движка существует.
+3. Класс реализует `EngineInterface`.
+4. Зависимости `requires` доступны.
+5. `provides` не конфликтуют с другими движками.
+6. Сущности существуют.
+7. Сущности реализуют требуемый интерфейс.
+8. Тесты движка проходят.
+```
+
+---
+
+# 4. Файл `Docs/CoreEngine/numeric-infrastructure.md`
+
+```md
+<!-- Docs/CoreEngine/numeric-infrastructure.md -->
+
+# Числовая инфраструктура CoreEngine
+
+CoreEngine предоставляет только низкоуровневую числовую инфраструктуру.
+
+Он не содержит:
+
+- ресурсов;
+- характеристик;
+- бонусов;
+- штрафов;
+- экономики;
+- боя;
+- конкретных игровых формул.
+
+---
+
+## MathKernel
+
+`MathKernel` отвечает за безопасные числовые операции.
+
+Основные возможности:
+
+```text
+add
+subtract
+multiply
+multiplyByFactor
+divide
+clamp
+fromFloat
+toFloat
+```
+
+---
+
+## Fixed point
+
+По умолчанию используется масштаб:
+
+```text
+1_000_000
+```
+
+Это означает:
+
+```text
+1.0 = 1_000_000
+0.5 = 500_000
+1.25 = 1_250_000
+```
+
+Масштаб можно менять в методах, если это необходимо.
+
+---
+
+## RoundingMode
+
+Поддерживаются режимы округления:
+
+```text
+HalfUp
+HalfDown
+Floor
+Ceiling
+TowardsZero
+```
+
+---
+
+## Правила числовой логики
+
+1. Критичная симуляция не должна использовать float.
+2. Float допустим только на границах ввода/вывода или для отображения.
+3. Все расчёты должны быть детерминированными.
+4. Все деления должны использовать контролируемый масштаб.
+5. Все округления должны быть явными.
+6. Все ограничения должны быть явными.
+7. Все доменные формулы принадлежат движкам, а не CoreEngine.
+
+---
+
+## DeterministicRandom
+
+`DeterministicRandom` предоставляет повторяемый RNG.
+
+Параметры:
+
+```text
+seed
+tick
+scope
+counter
+```
+
+Генерация основана на SHA-256.
+
+---
+
+## Методы DeterministicRandom
+
+```text
+setTick
+nextInt
+nextFixed
+chance
+```
+
+---
+
+## nextInt
+
+Возвращает целое число в диапазоне:
+
+```text
+min..max
+```
+
+---
+
+## nextFixed
+
+Возвращает значение в диапазоне:
+
+```text
+0..scale
+```
+
+---
+
+## chance
+
+Проверяет вероятность.
+
+`probability` задаётся в том же масштабе, что и `scale`.
+
+Пример:
+
+```text
+scale = 1_000_000
+probability = 500_000
+```
+
+означает вероятность 50%.
+
+---
+
+## Правила использования RNG
+
+1. Запрещено использовать `rand()`.
+2. Запрещено использовать `mt_rand()`.
+3. Запрещено использовать недетерминированные источники.
+4. Все случайные вызовы должны иметь понятный `scope`.
+5. Все случайные вызовы должны происходить в детерминированном порядке.
+6. RNG должен синхронизироваться с тиком.
+```
+
+---
+
+# 5. Файл `Docs/CoreEngine/testing.md`
+
+```md
+<!-- Docs/CoreEngine/testing.md -->
+
+# Тестирование CoreEngine
+
+---
+
+## Запуск тестов
+
+Если Composer установлен и зависимости установлены:
+
+```cmd
+vendor\bin\phpunit
+```
+
+Если PHP не находится в PATH, можно использовать PHP из OSPanel:
+
+```cmd
+C:\OSPanel\modules\php\PHP_8.1\php.exe vendor\bin\phpunit
+```
+
+---
+
+## Структура тестов
+
+```text
+tests/
+    CoreEngine/
+    Fixtures/
+```
+
+---
+
+## CoreEngine тесты
+
+Тесты ядра проверяют:
+
+- Kernel;
+- команды;
+- события;
+- тик-системы;
+- Container;
+- EngineFactory;
+- EngineLoader;
+- ManifestLoader;
+- EngineDependencyResolver;
+- EngineRegistration;
+- EntityRegistry;
+- EntityDiscovery;
+- MathKernel;
+- DeterministicRandom;
+- SnapshotManager;
+- CoreEngineBootstrap.
+
+---
+
+## Fixtures
+
+Фикстуры находятся в:
+
+```text
+tests/Fixtures/
+```
+
+Они используются для проверки:
+
+- загрузки движков;
+- регистрируемых движков;
+- сущностей;
+- контейнера;
+- автозагрузки.
+
+---
+
+## Правила тестирования
+
+1. Каждый новый механизм ядра должен иметь тесты.
+2. Каждый новый движок должен иметь тесты.
+3. Каждая критичная числовая операция должна иметь тесты.
+4. Тесты не должны зависеть от внешнего времени.
+5. Тесты не должны зависеть от недетерминированного RNG.
+6. Тесты не должны использовать реальную базу данных.
+7. Тесты не должны использовать сеть.
+8. Фикстуры должны быть минимальными.
+9. Фикстуры не должны имитировать полноценные игровые движки.
+10. Тесты должны быть воспроизводимыми.
+
+---
+
+## Что должно быть покрыто тестами в будущем
+
+- реальный GraphicsEngine skeleton;
+- реальный EconomyEngine skeleton;
+- интеграция движков через bootstrap;
+- загрузка сущностей из реальных движков;
+- восстановление состояния из снапшотов;
+- проверка детерминизма нескольких тиков;
+- проверка порядка загрузки зависимых движков;
+- проверка ошибок манифестов;
+- проверка ошибок регистрации сущностей.
+```
+
+---
+
+# 6. Файл `AI/system-prompt.md`
+
+```md
+<!-- AI/system-prompt.md -->
+
+# Системный промпт AI-ассистента проекта
+
+Ты — инженерный ассистент проекта модульного игрового движка-оркестратора.
+
+Твоя задача — помогать разрабатывать CoreEngine и подключаемые движки, строго следуя архитектуре проекта.
+
+---
+
+## Главная роль
+
+Ты должен:
+
+- понимать архитектуру CoreEngine;
+- не выдумывать сущности, которых нет в документации;
+- предлагать решения в рамках текущих контрактов;
+- помогать создавать новые движки по правилам модулей;
+- следить за детерминизмом;
+- следить за разделением ответственности;
+- помогать писать тесты;
+- помогать улучшать документацию.
+
+---
+
+## Обязательные правила
+
+1. CoreEngine не содержит игровую доменную логику.
+2. Графика, экономика, бой, UI, сеть — это подключаемые движки.
+3. Движки не должны напрямую менять состояние друг друга.
+4. Взаимодействие движков идёт через команды, события, состояние и контракты.
+5. Сущности движков отделены от ядер движков.
+6. Новые сущности должны добавляться без изменения ядра движка.
+7. Числовая инфраструктура находится в CoreEngine.
+8. Конкретные ресурсы, характеристики, бонусы и штрафы находятся в доменных движках.
+9. Нельзя использовать `rand()` или `mt_rand()` в симуляции.
+10. Нужно использовать `DeterministicRandomInterface`.
+11. Нельзя использовать float для критичной игровой симуляции.
+12. Нужно использовать `MathKernelInterface`.
+13. Все модули должны иметь манифесты.
+14. Все зависимости движков должны быть описаны через `requires` и `provides`.
+15. Все изменения должны быть тестируемыми.
+
+---
+
+## Стиль ответов
+
+- Отвечай на русском языке.
+- Не сокращай важные архитектурные объяснения.
+- Если обсуждается логика, объясняй полно.
+- Если запрашивается код, давай точные файлы и пути.
+- Если меняются существующие файлы, указывай, какие именно.
+- Если решение может нарушить архитектуру, предупреждай об этом.
+- Если данных недостаточно, задавай уточняющие вопросы.
+
+---
+
+## Запрещено
+
+- предлагать монолитный движок;
+- смешивать графику и игровую логику;
+- позволять UI напрямую менять состояние;
+- позволять графике менять авторитетное состояние;
+- позволять экономике напрямую менять боевые параметры;
+- создавать файлы под каждый игровой экземпляр;
+- создавать сущности в ядре движка;
+- использовать недетерминированные случайные источники;
+- игнорировать существующие контракты;
+- предлагать сложные механизмы без необходимости.
+```
+
+---
+
+# 7. Файл `AI/project-overview.md`
+
+```md
+<!-- AI/project-overview.md -->
+
+# Обзор проекта
+
+Проект представляет собой модульный игровой движок-оркестратор.
+
+Основная часть — `CoreEngine`.
+
+Он уже реализует:
+
+- тики;
+- состояние;
+- команды;
+- события;
+- снапшоты;
+- реестр движков;
+- реестр сущностей;
+- загрузку манифестов;
+- проверку зависимостей движков;
+- DI-контейнер;
+- математическое ядро;
+- детерминированный RNG;
+- bootstrap;
+- тесты.
+
+---
+
+## Текущий статус
+
+CoreEngine является рабочим фундаментом.
+
+Он ещё не содержит реальных игровых движков:
+
+```text
+GraphicsEngine — не создан
+EconomyEngine — не создан
+NetworkEngine — не создан
+UIEngine — не создан
+AudioEngine — не создан
+```
+
+---
+
+## Следующая цель
+
+Создание первых реальных подключаемых движков по правилам CoreEngine.
+
+Приоритет:
+
+```text
+1. GraphicsEngine skeleton
+2. EconomyEngine skeleton
+3. Integration examples
+4. Docs for engines
+5. AI context expansion
+```
+
+---
+
+## Ключевые директории
+
+```text
+src/CoreEngine/Contracts
+src/CoreEngine/Core
+tests/CoreEngine
+tests/Fixtures
+Docs/CoreEngine
+AI
+```
+
+---
+
+## Важные файлы
+
+```text
+src/CoreEngine/Core/Kernel.php
+src/CoreEngine/Core/CoreServices.php
+src/CoreEngine/Core/CoreEngineBootstrap.php
+src/CoreEngine/Core/EngineLoader.php
+src/CoreEngine/Core/EngineDependencyResolver.php
+src/CoreEngine/Core/EntityDiscovery.php
+src/CoreEngine/Core/EntityRegistry.php
+src/CoreEngine/Core/MathKernel.php
+src/CoreEngine/Core/DeterministicRandom.php
+src/CoreEngine/Core/SnapshotManager.php
+```
+
+---
+
+## Технологический стек
+
+```text
+PHP 8.1
+PHPUnit
+Composer PSR-4
+strict_types
+```
+```
+
+---
+
+# 8. Файл `AI/glossary.md`
+
+```md
+<!-- AI/glossary.md -->
+
+# Глоссарий проекта
+
+---
+
+## CoreEngine
+
+Ядро движка-оркестратора. Отвечает за инфраструктуру, тики, команды, события, состояние, движки и числовые сервисы.
+
+---
+
+## Engine
+
+Подключаемый специализированный движок.
+
+Примеры:
+
+```text
+GraphicsEngine
+EconomyEngine
+NetworkEngine
+UIEngine
+```
+
+---
+
+## Entity
+
+Сущность движка.
+
+Например:
+
+```text
+звезда;
+планета;
+корабль;
+здание;
+ресурс;
+торговый маршрут.
+```
+
+---
+
+## EngineManifest
+
+JSON-описание движка.
+
+Содержит id, версию, зависимости, сущности, команды и события.
+
+---
+
+## Tick
+
+Один цикл симуляции.
+
+---
+
+## Command
+
+Запрос на изменение состояния.
+
+---
+
+## Event
+
+Факт, который произошёл в системе.
+
+---
+
+## Snapshot
+
+Снимок состояния на конкретный тик.
+
+---
+
+## CoreServices
+
+Набор сервисов ядра, доступный движкам.
+
+---
+
+## EngineRegistration
+
+Объект, через который движок регистрирует свои механизмы.
+
+---
+
+## EntityRegistry
+
+Реестр сущностей по движкам.
+
+---
+
+## EntityDiscovery
+
+Механизм поиска сущностей движка.
+
+---
+
+## EngineDependencyResolver
+
+Механизм проверки и сортировки зависимостей движков.
+
+---
+
+## MathKernel
+
+Числовая инфраструктура CoreEngine.
+
+---
+
+## DeterministicRandom
+
+Детерминированный генератор случайных чисел.
+
+---
+
+## SnapshotManager
+
+Сервис создания, хранения и восстановления снапшотов.
+
+---
+
+## CoreEngineBootstrap
+
+Единая точка запуска CoreEngine.
+
+---
+
+## Fixed point
+
+Целочисленное представление дробных значений с фиксированным масштабом.
+
+---
+
+## Determinism
+
+Свойство системы давать одинаковый результат при одинаковых входных данных и порядке выполнения.
+```
+
+---
+
+# 9. Файл `AI/rules.md`
+
+```md
+<!-- AI/rules.md -->
+
+# Жёсткие правила проекта
+
+---
+
+## Архитектура
+
+1. CoreEngine — только инфраструктура.
+2. Игровые домены находятся в подключаемых движках.
+3. Движки не должны знать внутренности друг друга.
+4. Все межмодульные взаимодействия идут через ядро.
+5. Сущности движков отделены от ядер движков.
+6. Новые сущности не должны требовать изменения ядра движка.
+7. Манифест описывает движок.
+8. Зависимости движков задаются через `requires` и `provides`.
+
+---
+
+## Код
+
+1. PHP 8.1.
+2. `declare(strict_types=1);` обязателен.
+3. Интерфейсы используются для абстракций.
+4. Dependency Injection через конструкторы.
+5. Readonly свойства используются там, где это возможно.
+6. Каждый класс должен иметь одну ответственность.
+7. Не создавать лишние файлы без необходимости.
+8. Не создавать файлы под каждый игровой экземпляр.
+9. Все ошибки должны быть логируемыми и локализуемыми.
+10. Все критичные механизмы должны иметь тесты.
+
+---
+
+## Числа
+
+1. Критичная симуляция не использует float.
+2. Используется integer или fixed point.
+3. Округление должно быть явным.
+4. Деление должно использовать масштаб.
+5. Все случайные источники должны быть детерминированными.
+6. Запрещены `rand()` и `mt_rand()`.
+7. Используется `DeterministicRandomInterface`.
+8. Используется `MathKernelInterface`.
+
+---
+
+## Движки
+
+1. Движок должен иметь манифест.
+2. Движок должен реализовывать `EngineInterface`.
+3. Если движок регистрирует механизмы, он реализует `RegistrableEngineInterface`.
+4. Движок не должен напрямую менять чужое состояние.
+5. Движок не должен использовать сеть или базу данных напрямую.
+6. Движок должен использовать сервисы CoreEngine.
+7. Движок должен быть тестируемым.
+
+---
+
+## Сущности
+
+1. Сущности лежат в папке `Entities` движка.
+2. Сущности реализуют интерфейс, указанный в манифесте.
+3. Сущности не должны менять ядро движка.
+4. Сущности не должны быть игровыми экземплярами.
+5. Экземпляры игровых объектов являются данными, а не файлами.
+
+---
+
+## Документация
+
+1. Документация должна отражать реальную архитектуру.
+2. Нельзя описывать механизмы, которых ещё нет, как готовые.
+3. Изменения архитектуры должны сопровождаться обновлением документации.
+4. AI-контекст должен быть синхронизирован с документацией.
+```
+
+---
+
+# 10. Файл `AI/context-index.md`
+
+```md
+<!-- AI/context-index.md -->
+
+# Индекс контекста для AI
+
+Этот файл описывает, какие документы и файлы нужно учитывать при работе с проектом.
+
+---
+
+## Обязательные документы
+
+```text
+AI/system-prompt.md
+AI/project-overview.md
+AI/glossary.md
+AI/rules.md
+Docs/CoreEngine/architecture.md
+Docs/CoreEngine/concepts.md
+Docs/CoreEngine/module-guide.md
+Docs/CoreEngine/numeric-infrastructure.md
+Docs/CoreEngine/testing.md
+```
+
+---
+
+## Ключевые исходники CoreEngine
+
+```text
+src/CoreEngine/Contracts/EngineInterface.php
+src/CoreEngine/Contracts/RegistrableEngineInterface.php
+src/CoreEngine/Contracts/ContainerInterface.php
+src/CoreEngine/Contracts/MathKernelInterface.php
+src/CoreEngine/Contracts/DeterministicRandomInterface.php
+src/CoreEngine/Contracts/SnapshotStoreInterface.php
+src/CoreEngine/Core/Kernel.php
+src/CoreEngine/Core/CoreServices.php
+src/CoreEngine/Core/CoreEngineBootstrap.php
+src/CoreEngine/Core/CoreEngineRuntime.php
+src/CoreEngine/Core/EngineLoader.php
+src/CoreEngine/Core/EngineManifest.php
+src/CoreEngine/Core/ManifestLoader.php
+src/CoreEngine/Core/EngineFactory.php
+src/CoreEngine/Core/EngineDependencyResolver.php
+src/CoreEngine/Core/EngineRegistration.php
+src/CoreEngine/Core/EntityRegistry.php
+src/CoreEngine/Core/EntityDiscovery.php
+src/CoreEngine/Core/Container.php
+src/CoreEngine/Core/ContainerEngineInstantiator.php
+src/CoreEngine/Core/MathKernel.php
+src/CoreEngine/Core/DeterministicRandom.php
+src/CoreEngine/Core/SnapshotManager.php
+src/CoreEngine/Core/InMemorySnapshotStore.php
+```
+
+---
+
+## Тесты
+
+```text
+tests/CoreEngine/KernelTest.php
+tests/CoreEngine/ManifestLoaderTest.php
+tests/CoreEngine/EngineFactoryTest.php
+tests/CoreEngine/EngineLoaderTest.php
+tests/CoreEngine/EngineDependencyResolverTest.php
+tests/CoreEngine/EngineRegistrationTest.php
+tests/CoreEngine/EntityRegistryTest.php
+tests/CoreEngine/EntityDiscoveryTest.php
+tests/CoreEngine/MathKernelTest.php
+tests/CoreEngine/DeterministicRandomTest.php
+tests/CoreEngine/SnapshotManagerTest.php
+tests/CoreEngine/CoreEngineBootstrapTest.php
+tests/CoreEngine/ContainerTest.php
+tests/CoreEngine/ContainerEngineInstantiatorTest.php
+```
+
+---
+
+## Фикстуры
+
+```text
+tests/Fixtures/Engines/StubEngine
+tests/Fixtures/Engines/RegistrableStubEngine
+tests/Fixtures/Container
+```
+
+---
+
+## Порядок загрузки контекста
+
+1. `AI/system-prompt.md`
+2. `AI/rules.md`
+3. `AI/project-overview.md`
+4. `AI/glossary.md`
+5. `Docs/CoreEngine/architecture.md`
+6. `Docs/CoreEngine/concepts.md`
+7. `Docs/CoreEngine/module-guide.md`
+8. `Docs/CoreEngine/numeric-infrastructure.md`
+9. `Docs/CoreEngine/testing.md`
+10. Ключевые исходники CoreEngine по необходимости.
+```
+
+---
